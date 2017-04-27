@@ -1,0 +1,26 @@
+{
+  "name": "express-handlebars-advanced-example",
+  "version": "0.0.0",
+  "description": "",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Eric Ferraiuolo <eferraiuolo@gmail.com>",
+  "license": "BSD",
+  "dependencies": {
+    "bcrypt-nodejs": "0.0.3",
+    "express": "^4.7.2",
+    "glob": "^7.1.1",
+    "handlebars": "^4.0.6",
+    "mongoose": "^4.9.6",
+    "passport": "^0.3.2",
+    "passport-http": "^0.3.0",
+    "passport-http-bearer": "^1.0.1",
+    "passport-local": "^1.0.0",
+    "passport-oauth2": "^1.4.0",
+    "passport-oauth2-middleware": "^1.0.2"
+  }
+}
