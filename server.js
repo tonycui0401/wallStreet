@@ -3,23 +3,35 @@
 const Promise = global.Promise || require('promise');
 
 const express = require('express'),
-      exphbs  = require('./index'), // "express-handlebars"
-      helpers = require('./lib/helpers'),
-      OAuth2Strategy = require('passport-oauth2'),
-      LocalStrategy = require('passport-local').Strategy,
-      OAuth2RefreshTokenStrategy = require('passport-oauth2-middleware').Strategy,
-      passport = require('passport'),
-      BearerStrategy = require('passport-http-bearer').Strategy,
-      userController = require('./controllers/user'),
-      authController = require('./controllers/auth');
+    exphbs = require('./index'), // "express-handlebars"
+    helpers = require('./lib/helpers'),
+    OAuth2Strategy = require('passport-oauth2'),
+    OAuth2RefreshTokenStrategy = require('passport-oauth2-middleware').Strategy,
+    passport = require('passport'),
+    userController = require('./controllers/user'),
+    authController = require('./controllers/auth'),
+    request = require('request');
+
+
 
 
 const app = express();
 
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser(function(user, done) {
+    done(null, user);
+});
+
+passport.deserializeUser(function(user, done) {
+    done(null, user);
+});
+
 // Create `ExpressHandlebars` instance with a default layout.
 const hbs = exphbs.create({
     defaultLayout: 'main',
-    helpers      : helpers,
+    helpers: helpers,
 
     // Uses multiple partials dirs, templates in "shared/templates/" are shared
     // with the client-side of the app (see below).
@@ -39,36 +51,30 @@ function exposeTemplates(req, res, next) {
     // Uses the `ExpressHandlebars` instance to get the get the **precompiled**
     // templates which will be shared with the client-side of the app.
     hbs.getTemplates('shared/templates/', {
-        cache      : app.enabled('view cache'),
-        precompiled: true
-    }).then(function (templates) {
-        // RegExp to remove the ".handlebars" extension from the template names.
-        var extRegex = new RegExp(hbs.extname + '$');
+            cache: app.enabled('view cache'),
+            precompiled: true
+        }).then(function(templates) {
+            // RegExp to remove the ".handlebars" extension from the template names.
+            var extRegex = new RegExp(hbs.extname + '$');
 
-        // Creates an array of templates which are exposed via
-        // `res.locals.templates`.
-        templates = Object.keys(templates).map(function (name) {
-            return {
-                name    : name.replace(extRegex, ''),
-                template: templates[name]
-            };
-        });
+            // Creates an array of templates which are exposed via
+            // `res.locals.templates`.
+            templates = Object.keys(templates).map(function(name) {
+                return {
+                    name: name.replace(extRegex, ''),
+                    template: templates[name]
+                };
+            });
 
-        // Exposes the templates during view rendering.
-        if (templates.length) {
-            res.locals.templates = templates;
-        }
+            // Exposes the templates during view rendering.
+            if (templates.length) {
+                res.locals.templates = templates;
+            }
 
-        setImmediate(next);
-    })
-    .catch(next);
+            setImmediate(next);
+        })
+        .catch(next);
 }
-
-app.get('/', function (req, res) {
-    res.render('login', {
-        title: 'Login'
-    });
-});
 
 
 var refreshStrategy = new OAuth2RefreshTokenStrategy({
@@ -76,92 +82,83 @@ var refreshStrategy = new OAuth2RefreshTokenStrategy({
     userProperty: 'ticket', // Active user property name to store OAuth tokens
     authenticationURL: '/login', // URL to redirect unathorized users to
     callbackParameter: 'callback' //URL query parameter name to pass a return URL
-  });
+});
 
-  passport.use('main', refreshStrategy);  //Main authorization strategy that authenticates
-                                          //user with stored OAuth access token
-                                          //and performs a token refresh if needed
-
-  var oauthStartegy = new OAuth2Strategy({
-    authorizationURL: 'https://staging-auth.wallstreetdocs.com/oauth/authorize',
-    tokenURL: 'https://staging-auth.wallstreetdocs.com/oauth/token',
-    clientID: 'coding_test',
-    clientSecret: 'bwZm5XC6HTlr3fcdzRnD',
-    callbackURL: 'http://localhost:3000',
-    passReqToCallback: false //Must be omitted or set to false in order to work with OAuth2RefreshTokenStrategy
-  },
+var oauthStartegy = new OAuth2Strategy({
+        authorizationURL: 'https://staging-auth.wallstreetdocs.com/oauth/authorize',
+        tokenURL: 'https://staging-auth.wallstreetdocs.com/oauth/token',
+        clientID: 'coding_test',
+        clientSecret: 'bwZm5XC6HTlr3fcdzRnD',
+        callbackURL: "http://localhost:3000",
+        passReqToCallback: false //Must be omitted or set to false in order to work with OAuth2RefreshTokenStrategy
+    },
     refreshStrategy.getOAuth2StrategyCallback() //Create a callback for OAuth2Strategy
-  );
-
-  passport.use('oauth', oauthStartegy); //Strategy to perform regular OAuth2 code grant workflow
-  refreshStrategy.useOAuth2Strategy(oauthStartegy); //Register the OAuth strategy
-                                                    //to perform OAuth2 refresh token workflow
-
-  var localStrategy = new LocalStrategy({
-    usernameField : 'username',
-    passwordField : 'password'
-  },
-    refreshStrategy.getLocalStrategyCallback() //Create a callback for LocalStrategy
-  );
-
-  passport.use('local', localStrategy); //Strategy to perform a username/password login
-  refreshStrategy.useLocalStrategy(localStrategy); //Register the LocalStrategy
-                                                   //to perform an OAuth 'password' workflow
+);
 
 
 
-  //GET /login
-  app.get('/login', function(req, res){
-   var callback = req.query.callback || '/profile';
 
-   if (req.isAuthenticated()) {
-     return res.redirect(callback);
-   }
+passport.use('oauth', oauthStartegy);
+refreshStrategy.useOAuth2Strategy(oauthStartegy); //Register the OAuth strategy
 
-   //res.render('login_page');
-    res.render('login', {
-        title: 'Home'
-    });
-  });
-
-  //POST /login
-  app.post('/login', function(req, res, next) {
-   var callback = req.query.callback || '/profile';
-
-   passport.authenticate('local', function(err, user, info) {
-     if (err || !user) {
-       res.render('login', {
-        title: 'Home',
-        error: 'unable to login'
-     });
-       return next();
-     }
-
-     req.logIn(user, function(err) {
-       if (err) {
-         return next(err);
-       }
-
-       return res.redirect(callback);
-     });
-   })(req, res, next);
-  });
-
-  //GET /oauth
-  app.get('/oauth', passport.authenticate('oauth'));
-
-  //GET /oauth/callback
-  app.get('/oauth/callback', passport.authenticate('oauth'), function(req, res) {
+app.get('/', passport.authenticate('oauth'), function(req, res) {
     res.redirect('/profile');
-  });
+});
+
+app.get('/oauth', passport.authenticate('oauth'));
+
+app.get('/profile', function(req, resp, next) {
+
+    request({
+        url: 'https://staging-auth.wallstreetdocs.com/oauth/token',
+        method: 'POST',
+        auth: {
+            user: 'coding_test',
+            pass: 'bwZm5XC6HTlr3fcdzRnD'
+        },
+        form: {
+            'code': '4FUmvIQscwFhHoUD',
+            'grant_type': 'client_credentials',
+            'redirect_uri': 'http://localhost:3000'
+        }
+    }, function(err, res) {
+        var json = JSON.parse(res.body);
+
+        var request = require('request');
+
+        var options = {
+            url: 'https://staging-auth.wallstreetdocs.com/oauth/userinfo',
+            headers: {
+                'authorization': 'Bearer ' + json.access_token
+            }
+        };
+
+        function callback(error, response, body) {
+            if (!error && response.statusCode == 200) {
+                var info = JSON.parse(body);
+                //console.log(info.username);
+                // console.log(info.forks_count + " Forks");
+                // res.render('login', {
+                //      title: info.username
+                //  });
+                resp.render('profile', {
+                    title: info.username
+                });
+            }
+        }
+
+        request(options, callback);
 
 
-  app.get('/profile', authController.isAuthenticated, userController.viewProfile);
+    });
+
+});
+
 
 
 
 app.use(express.static('public/'));
 
-app.listen(3000, function () {
+app.listen(3000, function() {
     console.log('express-handlebars example server listening on: 3000');
 });
