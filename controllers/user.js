@@ -1,21 +1,51 @@
-//const User = require('../models/user');
-const setUserInfo = require('../helpers').setUserInfo;
-
+const exphbs = require('../index'),
+      request = require('request');
 //= =======================================
-// User Routes
+// User Profile View
 //= =======================================
-exports.viewProfile = function (req, res, next) {
-  const userId = req.params.userId;
+exports.view = function(req, resp, next) {
 
-  if (req.user._id.toString() !== userId) { return res.status(401).json({ error: 'You are not authorized to view this user profile.' }); }
-  User.findById(userId, (err, user) => {
-    if (err) {
-      res.status(400).json({ error: 'No user could be found for this ID.' });
-      return next(err);
-    }
+    request({
+        url: 'https://staging-auth.wallstreetdocs.com/oauth/token',
+        method: 'POST',
+        auth: {
+            user: 'coding_test',
+            pass: 'bwZm5XC6HTlr3fcdzRnD'
+        },
+        form: {
+            'code': '4FUmvIQscwFhHoUD',
+            'grant_type': 'client_credentials',
+            'redirect_uri': 'http://localhost:3000'
+        }
+    }, function(err, res) {
+        var json = JSON.parse(res.body);
 
-    const userToReturn = setUserInfo(user);
+        var request = require('request');
 
-    return res.status(200).json({ user: userToReturn });
-  });
+        var options = {
+            url: 'https://staging-auth.wallstreetdocs.com/oauth/userinfo',
+            headers: {
+                'authorization': 'Bearer ' + json.access_token
+            }
+        };
+
+        function callback(error, response, body) {
+            if (!error && response.statusCode == 200) {
+                var info = JSON.parse(body);
+                resp.render('profile', {
+                    title: info.username, 
+                    email: info.emails[0].value,
+                    family_name: info.name.family_name,
+                    given_name: info.name.given_name,
+                    org_name: info.organisation.name
+                });
+            }
+        }
+
+        request(options, callback);
+
+
+    });
+
 };
+

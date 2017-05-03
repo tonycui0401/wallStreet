@@ -8,8 +8,7 @@ const express = require('express'),
     OAuth2Strategy = require('passport-oauth2'),
     OAuth2RefreshTokenStrategy = require('passport-oauth2-middleware').Strategy,
     passport = require('passport'),
-    userController = require('./controllers/user'),
-    authController = require('./controllers/auth'),
+    UserController = require('./controllers/user'),
     request = require('request');
 
 
@@ -101,60 +100,19 @@ var oauthStartegy = new OAuth2Strategy({
 passport.use('oauth', oauthStartegy);
 refreshStrategy.useOAuth2Strategy(oauthStartegy); //Register the OAuth strategy
 
-app.get('/', passport.authenticate('oauth'), function(req, res) {
+app.get('/', passport.authenticate('oauth', { failureRedirect: '/oauth' }), function(req, res) {
     res.redirect('/profile');
+});
+
+app.get('/login',  function(req, resp, res) {
+     resp.render('login', {
+                    title: "dashboard" 
+                });
 });
 
 app.get('/oauth', passport.authenticate('oauth'));
 
-app.get('/profile', function(req, resp, next) {
-
-    request({
-        url: 'https://staging-auth.wallstreetdocs.com/oauth/token',
-        method: 'POST',
-        auth: {
-            user: 'coding_test',
-            pass: 'bwZm5XC6HTlr3fcdzRnD'
-        },
-        form: {
-            'code': '4FUmvIQscwFhHoUD',
-            'grant_type': 'client_credentials',
-            'redirect_uri': 'http://localhost:3000'
-        }
-    }, function(err, res) {
-        var json = JSON.parse(res.body);
-
-        var request = require('request');
-
-        var options = {
-            url: 'https://staging-auth.wallstreetdocs.com/oauth/userinfo',
-            headers: {
-                'authorization': 'Bearer ' + json.access_token
-            }
-        };
-
-        function callback(error, response, body) {
-            if (!error && response.statusCode == 200) {
-                var info = JSON.parse(body);
-                //console.log(info.username);
-                // console.log(info.forks_count + " Forks");
-                // res.render('login', {
-                //      title: info.username
-                //  });
-                resp.render('profile', {
-                    title: info.username
-                });
-            }
-        }
-
-        request(options, callback);
-
-
-    });
-
-});
-
-
+app.get('/profile', UserController.view);
 
 
 app.use(express.static('public/'));
